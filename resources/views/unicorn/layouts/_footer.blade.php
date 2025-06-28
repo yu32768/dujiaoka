@@ -3,7 +3,7 @@
     <div class="row">
         <div class="col-12 text-center">
             <div class="author">
-                Powered by：<a href="http://dujiaoka.com">@独角数卡</a>
+                <a href="https://store.shu315.com">@store.shu315.com</a>
             </div>
             <div class="custom">
                 {!! dujiaoka_config_get('footer') !!}
