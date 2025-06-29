@@ -27,7 +27,7 @@
         <div class="category">
             <div class="container">
                 <div class="row">
-                    <div class="col-md-12">
+                    <!-- <div class="col-md-12">
                         <h3 class="text-center">
                                 <span style="vertical-align: inherit;">
                                     {{ __('dujiaoka.equipment.what_do_you_need_today') }}
@@ -39,7 +39,7 @@
                                     {{ __('dujiaoka.equipment.self_promotion') }}
                                 </span>
                         </p>
-                    </div>
+                    </div> -->
                     <div class="col-md-12">
                         <div class="category-menus">
                                 <ul class="nav nav-pills  justify-content-center">
