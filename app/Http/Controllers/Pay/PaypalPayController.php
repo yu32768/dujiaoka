@@ -26,6 +26,17 @@ class PaypalPayController extends PayController
 
     const Currency = 'USD'; //货币单位
 
+    public function getFrankfurterRate($from, $to)
+    {
+        $url = "https://api.frankfurter.app/latest?from={$from}&to={$to}";
+        $response = file_get_contents($url);
+        $data = json_decode($response, true);
+        if (isset($data['rates'][$to])) {
+            return $data['rates'][$to];
+        }
+        return null;
+    }
+
     public function gateway(string $payway, string $orderSN)
     {
         try {
@@ -40,12 +51,26 @@ class PaypalPayController extends PayController
             $paypal->setConfig(['mode' => 'live']);
             $product = $this->order->title;
             // 得到汇率
-            $total = Currency::convert()
-                ->from('CNY')
-                ->to('USD')
-                ->amount($this->order->actual_price)
-                ->round(2)
-                ->get();
+            $rate = $this->getFrankfurterRate('CNY', 'USD');
+            $total = null;
+            if ($rate) {
+                $total = round($this->order->actual_price * $rate, 2);
+                Log::info("paypal支付转换汇率", [
+                    'order_sn' => $this->order->order_sn,
+                    'original_price_cny' => $this->order->actual_price,
+                    'converted_price_usd' => $total,
+                    'exchange_rate' => $rate,
+                ]);
+            }
+            // 如果汇率换算失败，直接用 7.0 计算
+            if (empty($total)) {
+                $total = round($this->order->actual_price / 7.0, 2);
+                Log::warning("paypal支付汇率转换失败，使用默认汇率7.0计算", [
+                    'order_sn' => $this->order->order_sn,
+                    'original_price_cny' => $this->order->actual_price,
+                    'converted_price_usd' => $total,
+                ]);
+            }
             $shipping = 0;
             $description = $this->order->title;
             $payer = new Payer();
@@ -68,6 +93,17 @@ class PaypalPayController extends PayController
             $approvalUrl = $payment->getApprovalLink();
             return redirect($approvalUrl);
         } catch (PayPalConnectionException $payPalConnectionException) {
+            // 1. 获取详细的 JSON 格式错误信息字符
+            $errorData = $payPalConnectionException->getData();
+            // 2. 尝试转换为数组以便 Log 记录（可选，视你的日志驱动而定）
+            $errorDetails = json_decode($errorData, true);
+            Log::error("paypal支付连接异常", [
+                'http_code' => $payPalConnectionException->getCode(), // HTTP状态码 (如 400)
+                'summary'   => $payPalConnectionException->getMessage(), // 简要信息
+                'details'   => $errorDetails ? $errorDetails : $errorData, // 详细报错内容
+                'price'     => $this->order->actual_price,
+            ]);
+
             return $this->err($payPalConnectionException->getMessage());
         } catch (RuleValidationException $exception) {
             return $this->err($exception->getMessage());
@@ -85,7 +121,8 @@ class PaypalPayController extends PayController
         $orderSN = $request->input('orderSN');
         if ($success == 'no' || empty($paymentId) || empty($payerID)) {
             // 取消支付
-            redirect(url('detail-order-sn', ['orderSN' => $payerID]));
+            Log::info("paypal支付取消",  ['支付取消，支付ID【' . $paymentId . '】,支付人ID【' . $payerID . '】']);
+            return redirect(url('/', ['orderSN' => $payerID]));
         }
         $order = $this->orderService->detailOrderSN($orderSN);
         if (!$order) {
